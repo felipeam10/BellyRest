@@ -6,30 +6,19 @@ import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import br.com.felipe.rest.core.BaseTest;
 import br.com.felipe.rest.tests.Movimentacao;
+import br.com.felipe.rest.utils.BellyUtils;
 import br.com.felipe.rest.utils.DateUtils;
 import io.restassured.RestAssured;
 
 public class MovimentacaoTest extends BaseTest {
 	
-	public Integer getIdContaPeloNome(String nome) {
-		return RestAssured.get("/contas?nome=" + nome).then().extract().path("id[0]");
-	}
-
-	public Integer getIdMovPelaDescricao(String desc) {
-		return RestAssured.get("/transacoes?descricao=" + desc).then().extract().path("id[0]");
-	}
-	
 	private Movimentacao getMovimentacaoValida() {
 		Movimentacao mov = new Movimentacao();
-		mov.setConta_id(getIdContaPeloNome("Conta para movimentacoes"));
+		mov.setConta_id(BellyUtils.getIdContaPeloNome("Conta para movimentacoes"));
 //		mov.setUsuario_id(usuario_id);
 		mov.setDescricao("Pagamento de agua");
 		mov.setEnvolvido("Felipe");
@@ -39,25 +28,6 @@ public class MovimentacaoTest extends BaseTest {
 		mov.setValor(100f);
 		mov.setStatus(true);
 		return mov;
-	}
-	
-	@BeforeClass 
-	public static void login() {
-		Map<String, String> login = new HashMap<>();
-		login.put("email", "felipeam10@hotmail.com");
-		login.put("senha", "123456");
-		
-		String token = given()
-			.body(login)
-		.when()
-			.post("/signin")
-		.then()
-			.statusCode(200)
-			.extract().path("token");
-		
-		RestAssured.requestSpecification.header("Authorization", "JWT " + token); // JWT é mais antigo, mais atual eh "bearer "
-		
-		RestAssured.get("/reset").then().statusCode(200);
 	}
 
 	@Test
@@ -113,7 +83,7 @@ public class MovimentacaoTest extends BaseTest {
 	
 	@Test
 	public void naoDeveRemoverContaComMovimentacao() {
-		Integer CONTA_ID = getIdContaPeloNome("Conta com movimentacao");
+		Integer CONTA_ID = BellyUtils.getIdContaPeloNome("Conta com movimentacao");
 		
 		given()
 			.pathParam("id", CONTA_ID)
@@ -127,7 +97,7 @@ public class MovimentacaoTest extends BaseTest {
 	
 	@Test
 	public void deveRemoverMovimentacao() {
-		Integer MOV_ID = getIdMovPelaDescricao("Movimentacao para exclusao");
+		Integer MOV_ID = BellyUtils.getIdMovPelaDescricao("Movimentacao para exclusao");
 		
 		given()
 			.pathParam("id", MOV_ID)
