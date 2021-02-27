@@ -7,86 +7,85 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import br.com.felipe.rest.core.BaseTest;
+import br.com.felipe.rest.utils.DateUtils;
+import io.restassured.RestAssured;
+import io.restassured.specification.FilterableRequestSpecification;
 
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class BellyTest extends BaseTest{
 	
-	private String token;
+	private static String CONTA_NAME = "Conta " + System.nanoTime();
+	private static Integer CONTA_ID; 
+	private static Integer MOV_ID;
 	
 	private Movimentacao getMovimentacaoValida() {
 		Movimentacao mov = new Movimentacao();
-		mov.setConta_id(423740);
+		mov.setConta_id(CONTA_ID);
 //		mov.setUsuario_id(usuario_id);
 		mov.setDescricao("Pagamento de agua");
 		mov.setEnvolvido("Felipe");
 		mov.setTipo("REC");
-		mov.setData_transacao("01/01/2020");
-		mov.setData_pagamento("01/01/2021");
+		mov.setData_transacao(DateUtils.getDataDiferencaDias(-1));
+		mov.setData_pagamento(DateUtils.getDataDiferencaDias(5));
 		mov.setValor(100f);
 		mov.setStatus(true);
 		return mov;
 	}
 
-	@Before
-	public void login() {
+	@BeforeClass // é executado apenas uma vez para a classe inteira. Se fosse soh o @before executaria um token para cada teste
+	public static void login() { // no before class o metodo precisa ser static
 		Map<String, String> login = new HashMap<>();
 		login.put("email", "felipeam10@hotmail.com");
 		login.put("senha", "123456");
 		
-		token = given()
+		String token = given()
 			.body(login)
 		.when()
 			.post("/signin")
 		.then()
 			.statusCode(200)
 			.extract().path("token");
+		
+		RestAssured.requestSpecification.header("Authorization", "JWT " + token); // JWT é mais antigo, mais atual eh "bearer "
 	}
 
 	@Test
-	public void naoDeveAcessarAPISemToken() {
-		
-		given()
-		.when()
-			.get("/contas")
-		.then()
-			.statusCode(401)
-		;
-	}
-	
-	@Test
-	public void deveIncluirContaComSucesso() {
+	public void t02_deveIncluirContaComSucesso() {
 		// o login eh feito pela classe @Before public void login()
-		given()
-			.header("Authorization", "JWT " + token) // JWT é mais antigo, mais atual eh "bearer "
-			.body("{\"nome\": \"Conta de Teste 3\"}")
+		CONTA_ID = given()
+			.body("{\"nome\": \""+CONTA_NAME+"\"}")
 		.when()
 			.post("/contas")
 		.then()
 			.statusCode(201)
+			.extract().path("id")
 		;
 	}
 	
 	@Test
-	public void deveAlterarContaComSucesso() {
+	public void t03_deveAlterarContaComSucesso() {
 		// o login eh feito pela classe @Before public void login()
 		given()
-			.header("Authorization", "JWT " + token)
-			.body("{\"nome\": \"Conta de Teste 2.1 alterada\"}")
+			.body("{\"nome\": \""+CONTA_NAME+" alterada\"}")
+			.pathParam("id", CONTA_ID)
 		.when()
-			.put("/contas/423740")
+			.put("/contas/{id}")
 		.then()
 			.statusCode(200)
-			.body("nome", is("Conta de Teste 2.1 alterada"))
+			.body("nome", is(CONTA_NAME + " alterada"))
 		;
 	}
 	
 	@Test
-	public void naoDeveContaComMesmoNome() {
+	public void t04_naoDeveContaComMesmoNome() {
 		given()
-			.header("Authorization", "JWT " + token)
-			.body("{\"nome\": \"Conta de Teste 2.1 alterada\"}")
+			.body("{\"nome\": \""+CONTA_NAME+" alterada\"}")
 		.when()
 			.post("/contas")
 		.then()
@@ -97,23 +96,22 @@ public class BellyTest extends BaseTest{
 	}
 
 	@Test
-	public void deveInserirMovimentacaoComSucesso() {
+	public void t05_deveInserirMovimentacaoComSucesso() {
 		Movimentacao mov = getMovimentacaoValida();
 		
-		given()
-			.header("Authorization", "JWT " + token)
+		MOV_ID = given()
 			.body(mov)
 		.when()
 			.post("/transacoes")
 		.then()
 			.statusCode(201)
+			.extract().path("id")
 		;
 	}
 
 	@Test
-	public void deveValidarCamposObrigatoriosMovimentacao() {
+	public void t06_deveValidarCamposObrigatoriosMovimentacao() {
 		given()
-			.header("Authorization", "JWT " + token)
 			.body("{}")
 		.when()
 			.post("/transacoes")
@@ -134,12 +132,11 @@ public class BellyTest extends BaseTest{
 	}
 	
 	@Test
-	public void naoDeveInserirMovimentacaoComDataFutura() {
+	public void t07_naoDeveInserirMovimentacaoComDataFutura() {
 		Movimentacao mov = getMovimentacaoValida();
-		mov.setData_transacao("28/02/2021");
+		mov.setData_transacao(DateUtils.getDataDiferencaDias(5));
 		
 		given()
-			.header("Authorization", "JWT " + token)
 			.body(mov)
 		.when()
 			.post("/transacoes")
@@ -151,11 +148,11 @@ public class BellyTest extends BaseTest{
 	}
 	
 	@Test
-	public void naoDeveRemoverContaComMovimentacao() {
+	public void t08_naoDeveRemoverContaComMovimentacao() {
 		given()
-			.header("Authorization", "JWT " + token)
+			.pathParam("id", CONTA_ID)
 		.when()
-			.delete("/contas/427782")
+			.delete("/contas/{id}")
 		.then()
 			.statusCode(500)
 			.body("constraint", is("transacoes_conta_id_foreign"))
@@ -163,14 +160,13 @@ public class BellyTest extends BaseTest{
 	}
 	
 	@Test
-	public void deveCalcularSaldoContas() {
+	public void t09_deveCalcularSaldoContas() {
 		given()
-			.header("Authorization", "JWT " + token)
 		.when()
 			.get("/saldo")
 		.then()
 			.statusCode(200)
-			.body("find{it.conta_id == 423740}.saldo", is("400.00"))
+			.body("find{it.conta_id == "+CONTA_ID+"}.saldo", is("100.00"))
 //			.body("conta_id", hasItems("423740")) nao funcionou
 //			.body("conta", hasItem("Conta de Teste 2.1 alterada")) funcionou
 //			.body("saldo", hasItem("400.00")) funcionou
@@ -178,13 +174,26 @@ public class BellyTest extends BaseTest{
 	}
 	
 	@Test
-	public void deveRemoverMovimentacao() {
+	public void t10_deveRemoverMovimentacao() {
 		given()
-			.header("Authorization", "JWT " + token)
+			.pathParam("id", MOV_ID)
 		.when()
-			.delete("/transacoes/391832")
+			.delete("/transacoes/{id}")
 		.then()
 			.statusCode(204)
+		;
+	}
+	
+	@Test
+	public void t11_naoDeveAcessarAPISemToken() {
+		FilterableRequestSpecification req = (FilterableRequestSpecification) RestAssured.requestSpecification;
+		req.removeHeader("Authorization");
+		
+		given()
+		.when()
+			.get("/contas")
+		.then()
+			.statusCode(401)
 		;
 	}
 }
